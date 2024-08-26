@@ -1,29 +1,39 @@
 let
-    // Function Name: GroupAndConcatenateColumnB
-    // Description: This function groups the rows of a table by a specified column (ColumnA) and concatenates the values of another specified column (ColumnB) within each group. The concatenated values in ColumnB are separated by a user-defined separator, with a line break as the default separator.
+    // Function Name: GroupAndConcatenateColumns
+    // Description: This function groups the rows of a table by one or more specified columns and concatenates the values of the remaining columns within each group.
     // Parameters:
     //    - TableInput: The input table to be grouped and modified.
-    //    - ColumnAName: The name of the column by which the table will be grouped.
-    //    - ColumnBName: The name of the column whose values will be concatenated within each group.
-    //    - Separator (optional): A text string used to separate the concatenated values in ColumnB. Defaults to a line break ("#(lf)").
-    // Returns: A table where each unique value in ColumnA is represented by a single row, and the corresponding values in ColumnB are concatenated and separated by the specified separator.
-    // Example:
-    //    Given a table with columns ["Category", "Item"], if ColumnAName = "Category" and ColumnBName = "Item", and Separator = ", ", the function will group the table by "Category" and concatenate all "Item" values within each group into a single string, separated by ", ".
+    //    - GroupingColumns: Either a text (single column name) or a list of texts (multiple column names) by which the table will be grouped.
+    //    - Separator (optional): A text string used to separate the concatenated values. Defaults to a line break ("#(lf)").
+    // Returns: A table where each unique combination of values in the grouping columns is represented by a single row, and the corresponding values in the remaining columns are concatenated and separated by the specified separator.
 
-    GroupAndConcatenateColumnB = (TableInput as table, ColumnAName as text, ColumnBName as text, optional Separator as text) as table =>
+    GroupAndConcatenateColumns = (TableInput as table, GroupingColumns as any, optional Separator as text) as table =>
     let
         // Set the default separator to a line break if not provided
         SeparatorValue = if Separator = null then "#(lf)" else Separator,
 
-        // Group the table by ColumnA and concatenate the values in ColumnB
+        // Convert GroupingColumns to a list if it's a single text value
+        GroupingColumnsList = if Value.Is(GroupingColumns, type text) then {GroupingColumns} else GroupingColumns,
+
+        // Get all column names from the input table
+        AllColumns = Table.ColumnNames(TableInput),
+
+        // Determine which columns need to be concatenated (all columns except grouping columns)
+        ColumnsToConcat = List.Difference(AllColumns, GroupingColumnsList),
+
+        // Create a list of aggregations for the Group operation
+        Aggregations = List.Transform(
+            ColumnsToConcat,
+            each {_, (t) => Text.Combine(List.Transform(Table.Column(t, _), Text.From), SeparatorValue), type text}
+        ),
+
+        // Group the table by the specified column(s) and concatenate the values in the remaining columns
         GroupedTable = Table.Group(
             TableInput,
-            {ColumnAName},
-            {
-                {ColumnBName, each Text.Combine(Table.Column(_, ColumnBName), SeparatorValue), type text}
-            }
+            GroupingColumnsList,
+            Aggregations
         )
     in
         GroupedTable
 in
-    GroupAndConcatenateColumnB
+    GroupAndConcatenateColumns
